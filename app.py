@@ -14,9 +14,10 @@ This app allows you to extract sheet music from drum tutorial videos and save it
 It's designed to work best with YouTube shorts that display drum sheet music on the screen.
 
 """)
+
 video_url = st.text_input("Enter YouTube video URL:")
-st.header("
-Instructions:")
+
+st.header("Instructions")
 st.markdown("""
 1. Paste the link to a YouTube short containing sheet music.
 2. Click **Process Video** and wait for the app to process the video.
