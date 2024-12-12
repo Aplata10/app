@@ -1,27 +1,17 @@
 import os
-import streamlit as st
 import cv2
 import pytesseract
 from PIL import Image
-from moviepy.video.io.VideoFileClip import VideoFileClip
+import streamlit as st
 import numpy as np
-import subprocess
-from tempfile import NamedTemporaryFile
 
-# Function to download the video
-def download_video(url):
-    temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
-    try:
-        # Use yt-dlp to download the video
-        subprocess.run(
-            ['yt-dlp', '-f', 'best', '-o', temp_file, url],
-            check=True
-        )
-        st.info(f"Video downloaded successfully as {temp_file}")
-        return temp_file
-    except subprocess.CalledProcessError as e:
-        st.error(f"Error during video download: {e}")
-        return None
+# Function to validate video file
+def validate_video(video_path):
+    vidcap = cv2.VideoCapture(video_path)
+    if not vidcap.isOpened():
+        st.error("Failed to open video file. Ensure the file is valid.")
+        return False
+    return True
 
 # Function to extract total pages
 def extract_total_pages(frame_folder):
@@ -46,14 +36,21 @@ def extract_total_pages(frame_folder):
 
     return total_pages
 
-# Function to extract middle frames using MoviePy
+# Function to extract middle frames from video
 def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5):
     """
-    Extracts one frame from the middle of each segment using MoviePy, given the total pages.
+    Extracts one frame from the middle of each segment, given the total pages.
     """
     os.makedirs(output_folder, exist_ok=True)
-    clip = VideoFileClip(video_path)
-    video_length = clip.duration  # Get video length in seconds
+    vidcap = cv2.VideoCapture(video_path)
+
+    fps = vidcap.get(cv2.CAP_PROP_FPS)
+    total_frames = vidcap.get(cv2.CAP_PROP_FRAME_COUNT)
+    video_length = total_frames / fps
+
+    if not fps or not total_frames:
+        st.error("Failed to read video metadata. Ensure the video file is valid.")
+        return
 
     # Exclude intro length and calculate segment duration
     segment_duration = (video_length - intro_length) / total_pages
@@ -61,17 +58,22 @@ def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5
 
     # Extract frames at calculated timestamps
     for i, timestamp in enumerate(segments):
-        frame = clip.get_frame(timestamp)
-        frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
-        cv2.imwrite(frame_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-        print(f"Extracted frame for page {i + 1} at {timestamp:.2f}s")
+        frame_number = int(timestamp * fps)
+        vidcap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        success, frame = vidcap.read()
+        if success:
+            frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
+            cv2.imwrite(frame_path, frame)
+            print(f"Extracted frame for page {i + 1} at {timestamp:.2f}s")
+        else:
+            print(f"Failed to extract frame for page {i + 1}")
 
-    clip.close()
+    vidcap.release()
 
-# Function to create PDF
+# Function to create PDF from frames
 def create_pdf_from_frames(frame_folder, output_pdf):
     """
-    Converts enhanced frames into a single PDF.
+    Converts frames into a single PDF.
     """
     images = [
         Image.open(os.path.join(frame_folder, frame)).convert("RGB")
@@ -88,28 +90,31 @@ st.title("Drum Sheet Music Extractor")
 video_url = st.text_input("Enter YouTube video URL:")
 
 if st.button("Process Video"):
-    with st.spinner("Downloading and processing video..."):
-        video_path = download_video(video_url)
-        if video_path:
+    with st.spinner("Processing video..."):
+        video_path = "downloaded_video.webm"  # Replace with actual path if downloaded dynamically
+        if validate_video(video_path):
             frames_path = "frames"
             middle_frames_path = "middle_frames"
             output_pdf = "sheet_music_pages.pdf"
 
-            # Process video and generate PDF
             os.makedirs(frames_path, exist_ok=True)
             os.makedirs(middle_frames_path, exist_ok=True)
-            total_pages = extract_total_pages(frames_path)
-            extract_middle_frames(video_path, total_pages, middle_frames_path)
-            pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
 
-            if pdf_path:
-                with open(pdf_path, "rb") as f:
-                    st.download_button(
-                        label="Download PDF",
-                        data=f,
-                        file_name="sheet_music_pages.pdf",
-                        mime="application/pdf"
-                    )
-                st.success("PDF generated successfully!")
+            total_pages = extract_total_pages(frames_path)
+            if total_pages > 0:
+                extract_middle_frames(video_path, total_pages, middle_frames_path)
+                pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
+
+                if pdf_path:
+                    with open(pdf_path, "rb") as f:
+                        st.download_button(
+                            label="Download PDF",
+                            data=f,
+                            file_name="sheet_music_pages.pdf",
+                            mime="application/pdf"
+                        )
+                    st.success("PDF generated successfully!")
+                else:
+                    st.error("Failed to generate PDF.")
             else:
-                st.error("Failed to generate PDF.")
+                st.error("Failed to determine total pages.")
