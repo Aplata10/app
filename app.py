@@ -6,6 +6,32 @@ import numpy as np
 from PIL import Image, ImageEnhance
 import subprocess
 
+st.title("Drum Sheet Music Extractor")
+st.markdown("""
+Welcome **Drummer**! 🎶🥁
+
+This app allows you to extract sheet music from drum tutorial videos and save it as a clean and clear PDF.
+It's designed to work best with YouTube shorts that display drum sheet music on the screen.
+
+### Instructions:
+1. Paste the link to a YouTube short containing sheet music.
+2. Click **Process Video** and wait for the app to process the video.
+3. Download your extracted file as a PDF.
+
+### Recommended Video Types:
+- Videos that show clear, static drum sheet music on-screen.
+- Videos without excessive animations or overlays.
+- Clearly marked page numbers
+
+### Suggested Channel:
+    @SightReadDrums
+
+Below is an example of a recommended video:
+""")
+st.image("example1.png", caption="Example #1", use_column_width=True)
+st.image("example2.png", caption="Example #2", use_column_width=True)
+
+
 # Function to download the video in MP4 format
 def download_video_as_mp4(url, output_file="downloaded_video.mp4"):
     """
