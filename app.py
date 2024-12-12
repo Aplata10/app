@@ -7,7 +7,7 @@ import numpy as np
 import subprocess
 from tempfile import NamedTemporaryFile
 from imageio.v3 import imread
-
+import shutil
 # Function to download video
 def download_video(url):
     temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
@@ -19,7 +19,13 @@ def download_video(url):
             check=True
         )
         st.info(f"Video downloaded successfully as {temp_file}")
-        os.rename(temp_file, output_file)
+
+        # Copy the file to the desired location
+        shutil.copyfile(temp_file, output_file)
+
+        # Remove the temporary file
+        os.remove(temp_file)
+
         return output_file
     except subprocess.CalledProcessError as e:
         st.error(f"Error during video download: {e}")
