@@ -136,9 +136,6 @@ def extract_total_pages(frame_folder):
     return total_pages
 
 # Streamlit UI
-st.title("Drum Sheet Music Extractor")
-video_url = st.text_input("Enter YouTube video URL:")
-
 if st.button("Process Video"):
     with st.spinner("Downloading and processing video..."):
         mp4_path = download_video_as_mp4(video_url)
