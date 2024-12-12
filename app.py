@@ -47,14 +47,13 @@ def extract_total_pages(frame_folder):
     Scans frames to determine the total number of pages based on 'x/y' format.
     """
     total_pages = 0
-    print("Starting page detection...")
     for frame in sorted(os.listdir(frame_folder)):
         frame_path = os.path.join(frame_folder, frame)
         img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
         text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
-        
-        # Log extracted text for debugging
-        print(f"Frame: {frame}, Extracted Text:\n{text}\n{'-'*50}")
+
+        # Debug: Log the text extracted from each frame
+        print(f"Frame: {frame}\nExtracted Text:\n{text}\n{'-' * 50}")
 
         # Extract 'x/y' page number
         for line in text.splitlines():
@@ -66,8 +65,9 @@ def extract_total_pages(frame_folder):
                 except ValueError:
                     continue
 
-    print(f"Detected total pages: {total_pages}")
+    print(f"Total pages detected: {total_pages}")
     return total_pages
+
 
 # Function to extract frames
 # Function to extract frames from video
