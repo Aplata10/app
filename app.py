@@ -8,37 +8,30 @@ import subprocess
 from tempfile import NamedTemporaryFile
 from ffmpeg import input as ffmpeg_input, output as ffmpeg_output, run as ffmpeg_run
 
-
-# Function to download and convert video
-def download_video(url):
-    temp_file = "temp_video.webm"
+# Function to download and convert video def download_video(url):
+    temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
     output_file = "downloaded_video.mp4"
     try:
         # Use yt-dlp to download the video
-        with yt_dlp.YoutubeDL({'format': 'best', 'outtmpl': temp_file}) as ydl:
-            ydl.download([url])
-
-        # Use ffmpeg-python to convert the video to MP4
-        (
-            ffmpeg_output(
-                ffmpeg_input(temp_file),
-                output_file,
-                vcodec="libx264",
-                preset="fast",
-                crf="20",
-                pix_fmt="yuv420p",
-                acodec="aac"
-            )
-            .overwrite_output()
-            .run()
+        subprocess.run(
+            ['yt-dlp', '-f', 'best', '-o', temp_file, url],
+            check=True
         )
+        st.info(f"Video downloaded successfully as {temp_file}")
 
-        # Clean up the temporary file
+        # Convert the video to MP4 format
+        subprocess.run(
+            ['ffmpeg', '-i', temp_file, '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', output_file],
+            check=True
+        )
+        st.info(f"Video converted to MP4 format as {output_file}")
+
+        # Remove the temporary file
         os.remove(temp_file)
-        return output_file
 
-    except Exception as e:
-        st.error(f"Error occurred: {e}")
+        return output_file
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error during video processing: {e}")
         return None
 
 # Function to enhance images
