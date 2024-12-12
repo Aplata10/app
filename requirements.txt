@@ -5,3 +5,4 @@ Pillow
 yt-dlp
 numpy
 ffmpeg-python
+moviepy
