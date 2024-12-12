@@ -121,7 +121,7 @@ video_url = st.text_input("Enter YouTube video URL:")
 if st.button("Process Video"):
     with st.spinner("Downloading and processing video..."):
         video_path = download_video(video_url)
-        if video_path and validate_video(video_path):
+        if video_path:
             frames_path = "frames"
             middle_frames_path = "middle_frames"
             output_pdf = "sheet_music_pages.pdf"
@@ -153,5 +153,7 @@ if st.button("Process Video"):
                     st.error("Failed to generate PDF.")
             else:
                 st.error("Failed to detect pages. Ensure the video contains visible sheet music.")
+        else:
+            st.error("Failed to process video. Ensure the video URL is valid.")
         else:
             st.error("Failed to process video. Ensure the video URL is valid.")
