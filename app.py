@@ -9,6 +9,7 @@ from tempfile import NamedTemporaryFile
 from ffmpeg import input as ffmpeg_input, output as ffmpeg_output, run as ffmpeg_run
 
 # Function to download and convert video def download_video(url):
+def download_video(url):
     temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
     output_file = "downloaded_video.mp4"
     try:
