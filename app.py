@@ -41,20 +41,32 @@ def enhance_image(image_path):
     return enhanced_path
 
 # Function to extract total pages
+# Function to extract total pages
 def extract_total_pages(frame_folder):
+    """
+    Scans frames to determine the total number of pages based on 'x/y' format.
+    """
     total_pages = 0
+    print("Starting page detection...")
     for frame in sorted(os.listdir(frame_folder)):
         frame_path = os.path.join(frame_folder, frame)
         img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
         text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
+        
+        # Log extracted text for debugging
+        print(f"Frame: {frame}, Extracted Text:\n{text}\n{'-'*50}")
+
+        # Extract 'x/y' page number
         for line in text.splitlines():
             if "/" in line and line.strip().count("/") == 1:
                 try:
                     _, pages = line.strip().split("/")
                     pages = int(pages)
-                    total_pages = max(total_pages, pages)
+                    total_pages = max(total_pages, pages)  # Update max pages
                 except ValueError:
                     continue
+
+    print(f"Detected total pages: {total_pages}")
     return total_pages
 
 # Function to extract frames
