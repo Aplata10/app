@@ -12,28 +12,38 @@ def download_video(url):
     output_file = "downloaded_video.mp4"
 
     try:
-        # Download the video using yt-dlp
-        subprocess.run(['yt-dlp', '-f', 'best', '-o', temp_file, url], check=True, text=True)
+        # Check if yt-dlp is installed
+        yt_dlp_check = os.system("yt-dlp --version")
+        if yt_dlp_check != 0:
+            st.error("yt-dlp is not installed. Please install it and try again.")
+            return None
 
-        # Convert to MP4 using ffmpeg
-        subprocess.run(
-            ['ffmpeg', '-i', temp_file, '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', output_file],
-            check=True, text=True
-        )
+        # Check if ffmpeg is installed
+        ffmpeg_check = os.system("ffmpeg -version")
+        if ffmpeg_check != 0:
+            st.error("ffmpeg is not installed. Please install it and try again.")
+            return None
+
+        # Use yt-dlp to download the video
+        download_command = f"yt-dlp -f best -o {temp_file} {url}"
+        if os.system(download_command) != 0:
+            st.error("Failed to download the video. Check the URL and try again.")
+            return None
+
+        # Convert the downloaded video to MP4 using ffmpeg
+        convert_command = f"ffmpeg -i {temp_file} -c:v libx264 -preset fast -crf 20 -pix_fmt yuv420p -c:a aac {output_file}"
+        if os.system(convert_command) != 0:
+            st.error("Failed to convert the video to MP4 format.")
+            return None
 
         # Cleanup the temporary file
         os.remove(temp_file)
-
         return output_file
 
-    except FileNotFoundError as e:
-        st.error(f"Required tool missing: {e}. Ensure yt-dlp and ffmpeg are installed.")
-    except subprocess.CalledProcessError as e:
-        st.error(f"Command failed: {e}")
     except Exception as e:
-        st.error(f"Unexpected error: {e}")
+        st.error(f"An unexpected error occurred: {e}")
+        return None
 
-    return None
 
 
 # Function to enhance images
