@@ -6,107 +6,91 @@ from PIL import Image
 import numpy as np
 import subprocess
 from tempfile import NamedTemporaryFile
+from imageio.v3 import imread
 
 # Function to download video
 def download_video(url):
-    temp_file = "downloaded_video.webm"
+    temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
+    output_file = "downloaded_video.webm"
     try:
+        # Use yt-dlp to download the video
         subprocess.run(
             ['yt-dlp', '-f', 'best', '-o', temp_file, url],
             check=True
         )
         st.info(f"Video downloaded successfully as {temp_file}")
-        return temp_file
+        os.rename(temp_file, output_file)
+        return output_file
     except subprocess.CalledProcessError as e:
         st.error(f"Error during video download: {e}")
         return None
 
-# Function to validate video file
-def validate_video_file(video_path):
-    if not os.path.exists(video_path):
-        st.error(f"Video file not found: {video_path}")
-        return False
-    try:
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            st.error("Failed to open video file. Ensure the file is valid.")
-            return False
-        cap.release()
-        return True
-    except Exception as e:
-        st.error(f"Video validation failed: {e}")
-        return False
-
-# Function to extract frames
-def extract_frames(video_path, output_folder, frame_rate=1):
-    os.makedirs(output_folder, exist_ok=True)
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_interval = int(fps / frame_rate)
-    frame_count = 0
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_count % frame_interval == 0:
-            frame_path = os.path.join(output_folder, f"frame_{frame_count}.jpg")
-            cv2.imwrite(frame_path, frame)
-        frame_count += 1
-
-    cap.release()
-    st.info(f"Frames extracted to: {output_folder}")
+# Function to enhance images
+def enhance_image(image_path):
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    sharpening_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    img_sharpened = cv2.filter2D(img, -1, sharpening_kernel)
+    enhanced_path = image_path.replace(".jpg", "_enhanced.png")
+    cv2.imwrite(enhanced_path, img_sharpened)
+    return enhanced_path
 
 # Function to extract total pages
 def extract_total_pages(frame_folder):
-    """
-    Scans frames to determine the total number of pages based on 'x/y' format.
-    """
     total_pages = 0
     for frame in sorted(os.listdir(frame_folder)):
         frame_path = os.path.join(frame_folder, frame)
         img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
         text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
-
-        # Extract 'x/y' page number
         for line in text.splitlines():
             if "/" in line and line.strip().count("/") == 1:
                 try:
                     _, pages = line.strip().split("/")
                     pages = int(pages)
-                    total_pages = max(total_pages, pages)  # Update max pages
+                    total_pages = max(total_pages, pages)
                 except ValueError:
                     continue
-
     return total_pages
+
+# Function to extract frames
+def extract_frames(video_path, output_folder, frame_rate=1):
+    os.makedirs(output_folder, exist_ok=True)
+    vidcap = cv2.VideoCapture(video_path)
+    success, frame = vidcap.read()
+    count = 0
+    fps = vidcap.get(cv2.CAP_PROP_FPS)
+    interval = int(fps / frame_rate)
+
+    while success:
+        if count % interval == 0:
+            frame_filename = os.path.join(output_folder, f"frame_{count}.jpg")
+            cv2.imwrite(frame_filename, frame)
+        success, frame = vidcap.read()
+        count += 1
+    vidcap.release()
 
 # Function to extract middle frames
 def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5):
-    """
-    Extracts one frame from the middle of each segment, given the total pages.
-    """
     os.makedirs(output_folder, exist_ok=True)
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) / fps
-
+    vidcap = cv2.VideoCapture(video_path)
+    fps = vidcap.get(cv2.CAP_PROP_FPS)
+    video_length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT) / fps)
     segment_duration = (video_length - intro_length) / total_pages
     segments = [intro_length + segment_duration * i + segment_duration / 2 for i in range(total_pages)]
 
     for i, timestamp in enumerate(segments):
-        cap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
-        ret, frame = cap.read()
-        if ret:
+        vidcap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
+        success, frame = vidcap.read()
+        if success:
             frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
             cv2.imwrite(frame_path, frame)
-
-    cap.release()
+            enhance_image(frame_path)
+    vidcap.release()
 
 # Function to create PDF
 def create_pdf_from_frames(frame_folder, output_pdf):
     images = [
         Image.open(os.path.join(frame_folder, frame)).convert("RGB")
-        for frame in sorted(os.listdir(frame_folder))
+        for frame in sorted(os.listdir(frame_folder)) if frame.endswith("_enhanced.png")
     ]
     if images:
         images[0].save(output_pdf, save_all=True, append_images=images[1:])
@@ -153,7 +137,5 @@ if st.button("Process Video"):
                     st.error("Failed to generate PDF.")
             else:
                 st.error("Failed to detect pages. Ensure the video contains visible sheet music.")
-        else:
-            st.error("Failed to process video. Ensure the video URL is valid.")
         else:
             st.error("Failed to process video. Ensure the video URL is valid.")
