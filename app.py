@@ -2,6 +2,7 @@ import os
 import streamlit as st
 import cv2
 import pytesseract
+import numpy as np
 from PIL import Image, ImageEnhance
 import subprocess
 
