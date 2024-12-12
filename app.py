@@ -6,39 +6,23 @@ from PIL import Image
 import numpy as np
 import subprocess
 from tempfile import NamedTemporaryFile
-from moviepy.editor import VideoFileClip
 
-# Function to download the video directly
+# Function to download the video directly in MP4 format
 def download_video(url):
     """
-    Downloads the video in .webm format.
+    Downloads the video in MP4 format.
     """
-    temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
+    temp_file = NamedTemporaryFile(delete=False, suffix=".mp4").name
     try:
-        # Use yt-dlp to download the video in .webm format
+        # Use yt-dlp to download the video in MP4 format
         subprocess.run(
-            ['yt-dlp', '-f', 'bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]', '-o', temp_file, url],
+            ['yt-dlp', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]', '-o', temp_file, url],
             check=True
         )
         st.info(f"Video downloaded successfully as {temp_file}")
         return temp_file
     except subprocess.CalledProcessError as e:
         st.error(f"Error during video download: {e}")
-        return None
-
-# Function to convert .webm to .mp4
-def convert_to_mp4(input_path):
-    """
-    Converts .webm video to .mp4 format using MoviePy.
-    """
-    try:
-        clip = VideoFileClip(input_path)
-        output_path = input_path.replace(".webm", ".mp4")
-        clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
-        st.info(f"Video converted to MP4 successfully: {output_path}")
-        return output_path
-    except Exception as e:
-        st.error(f"Error during video conversion: {e}")
         return None
 
 # Function to enhance images
@@ -128,34 +112,30 @@ video_url = st.text_input("Enter YouTube video URL:")
 
 if st.button("Process Video"):
     with st.spinner("Downloading and processing video..."):
-        webm_path = download_video(video_url)
-        if webm_path:
-            mp4_path = convert_to_mp4(webm_path)  # Convert to MP4
-            if mp4_path:
-                frames_path = "frames"
-                middle_frames_path = "middle_frames"
-                output_pdf = "sheet_music_pages.pdf"
+        mp4_path = download_video(video_url)  # Directly download MP4
+        if mp4_path:
+            frames_path = "frames"
+            middle_frames_path = "middle_frames"
+            output_pdf = "sheet_music_pages.pdf"
 
-                # Process video and generate PDF
-                os.makedirs(frames_path, exist_ok=True)
-                os.makedirs(middle_frames_path, exist_ok=True)
-                total_pages = extract_total_pages(frames_path)
-                if total_pages > 0:
-                    extract_middle_frames(mp4_path, total_pages, middle_frames_path)
-                    pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
+            # Process video and generate PDF
+            os.makedirs(frames_path, exist_ok=True)
+            os.makedirs(middle_frames_path, exist_ok=True)
+            total_pages = extract_total_pages(frames_path)
+            if total_pages > 0:
+                extract_middle_frames(mp4_path, total_pages, middle_frames_path)
+                pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
 
-                    if pdf_path:
-                        with open(pdf_path, "rb") as f:
-                            st.download_button(
-                                label="Download PDF",
-                                data=f,
-                                file_name="sheet_music_pages.pdf",
-                                mime="application/pdf"
-                            )
-                        st.success("PDF generated successfully!")
-                    else:
-                        st.error("Failed to generate PDF.")
+                if pdf_path:
+                    with open(pdf_path, "rb") as f:
+                        st.download_button(
+                            label="Download PDF",
+                            data=f,
+                            file_name="sheet_music_pages.pdf",
+                            mime="application/pdf"
+                        )
+                    st.success("PDF generated successfully!")
                 else:
-                    st.error("Failed to detect pages. Ensure the video contains visible sheet music.")
+                    st.error("Failed to generate PDF.")
             else:
-                st.error("Failed to convert video to MP4.")
+                st.error("Failed to detect pages. Ensure the video contains visible sheet music.")
