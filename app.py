@@ -5,6 +5,7 @@ import pytesseract
 from PIL import Image
 import numpy as np
 import ffmpeg
+import subprocess
 from tempfile import NamedTemporaryFile
 
 # Function to download and convert video
