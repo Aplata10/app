@@ -5,46 +5,39 @@ from PIL import Image
 import streamlit as st
 from tempfile import NamedTemporaryFile
 import subprocess
+from ffmpeg import input as ffmpeg_input, output as ffmpeg_output, run as ffmpeg_run import os import streamlit as st
 
 # Function to download and convert video
 def download_video(url):
     temp_file = "temp_video.webm"
     output_file = "downloaded_video.mp4"
-
     try:
-        # Check if yt-dlp is installed
-        yt_dlp_check = os.system("yt-dlp --version")
-        if yt_dlp_check != 0:
-            st.error("yt-dlp is not installed. Please install it and try again.")
-            return None
-
-        # Check if ffmpeg is installed
-        ffmpeg_check = os.system("ffmpeg -version")
-        if ffmpeg_check != 0:
-            st.error("ffmpeg is not installed. Please install it and try again.")
-            return None
-
         # Use yt-dlp to download the video
-        download_command = f"yt-dlp -f best -o {temp_file} {url}"
-        if os.system(download_command) != 0:
-            st.error("Failed to download the video. Check the URL and try again.")
-            return None
+        with yt_dlp.YoutubeDL({'format': 'best', 'outtmpl': temp_file}) as ydl:
+            ydl.download([url])
 
-        # Convert the downloaded video to MP4 using ffmpeg
-        convert_command = f"ffmpeg -i {temp_file} -c:v libx264 -preset fast -crf 20 -pix_fmt yuv420p -c:a aac {output_file}"
-        if os.system(convert_command) != 0:
-            st.error("Failed to convert the video to MP4 format.")
-            return None
+        # Use ffmpeg-python to convert the video to MP4
+        (
+            ffmpeg_output(
+                ffmpeg_input(temp_file),
+                output_file,
+                vcodec="libx264",
+                preset="fast",
+                crf="20",
+                pix_fmt="yuv420p",
+                acodec="aac"
+            )
+            .overwrite_output()
+            .run()
+        )
 
-        # Cleanup the temporary file
+        # Clean up the temporary file
         os.remove(temp_file)
         return output_file
 
     except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
+        st.error(f"Error occurred: {e}")
         return None
-
-
 
 # Function to enhance images
 def enhance_image(image_path):
