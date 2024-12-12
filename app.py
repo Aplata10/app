@@ -14,12 +14,6 @@ This app allows you to extract sheet music from drum tutorial videos and save it
 It's designed to work best with YouTube shorts that display drum sheet music on the screen.
 """)
 
-video_url = st.text_input("Enter YouTube video URL:")
-if st.button("Process Video"):
-    with st.spinner("Processing your video..."):
-        # Process the video logic here
-        pass  # Replace with your function calls
-
 st.header("Instructions:")
 st.markdown("""
 1. Paste the link to a YouTube short containing sheet music.
@@ -39,12 +33,8 @@ Below is an example of a recommended video:
 st.image("example1.png", caption="Example #1", use_column_width=True)
 st.image("example2.png", caption="Example #2", use_column_width=True)
 
-
 # Function to download the video in MP4 format
 def download_video_as_mp4(url, output_file="downloaded_video.mp4"):
-    """
-    Downloads the video as an MP4 using yt-dlp.
-    """
     try:
         subprocess.run(
             ['yt-dlp', '-f', 'best[ext=mp4]', '-o', output_file, url],
@@ -62,9 +52,6 @@ def download_video_as_mp4(url, output_file="downloaded_video.mp4"):
 
 # Function to enhance images
 def enhance_image(image):
-    """
-    Enhances the quality of an image by sharpening it.
-    """
     pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     enhancer = ImageEnhance.Sharpness(pil_image)
     enhanced_image = enhancer.enhance(2.0)  # Increase sharpness
@@ -72,9 +59,6 @@ def enhance_image(image):
 
 # Function to create PDF
 def create_pdf_from_frames(frame_folder, output_pdf):
-    """
-    Converts extracted and enhanced frames into a PDF.
-    """
     images = [
         Image.open(os.path.join(frame_folder, frame)).convert("RGB")
         for frame in sorted(os.listdir(frame_folder)) if frame.endswith(".jpg")
@@ -87,11 +71,8 @@ def create_pdf_from_frames(frame_folder, output_pdf):
         st.error("No frames to include in PDF.")
         return None
 
-# Function to extract frames from the video
+# Function to extract frames
 def extract_frames(video_path, output_folder, total_pages, intro_length=5):
-    """
-    Extracts frames from the middle of segments based on the total number of pages.
-    """
     os.makedirs(output_folder, exist_ok=True)
     vidcap = cv2.VideoCapture(video_path)
     fps = vidcap.get(cv2.CAP_PROP_FPS)
@@ -115,11 +96,8 @@ def extract_frames(video_path, output_folder, total_pages, intro_length=5):
             st.warning(f"Failed to extract frame for page {i + 1}.")
     vidcap.release()
 
-# Function to extract the total number of pages
+# Function to extract total pages
 def extract_total_pages(frame_folder):
-    """
-    Scans frames to determine the total number of pages based on 'x/y' format.
-    """
     total_pages = 0
     for frame in sorted(os.listdir(frame_folder)):
         frame_path = os.path.join(frame_folder, frame)
@@ -135,13 +113,13 @@ def extract_total_pages(frame_folder):
                     continue
     return total_pages
 
-# Streamlit UI
+# Streamlit Processing
+video_url = st.text_input("Enter YouTube video URL:")
 if st.button("Process Video"):
     with st.spinner("Downloading and processing video..."):
         mp4_path = download_video_as_mp4(video_url)
         if mp4_path:
             frames_path = "frames"
-            middle_frames_path = "middle_frames"
             output_pdf = "sheet_music_pages.pdf"
 
             # Clear previous frames
@@ -153,7 +131,8 @@ if st.button("Process Video"):
 
             # Extract frames and process
             st.info("Extracting frames...")
-            extract_frames(mp4_path, frames_path, total_pages=4)
+            total_pages = 4  # Example: Replace with dynamic logic using `extract_total_pages` if needed
+            extract_frames(mp4_path, frames_path, total_pages)
             pdf_path = create_pdf_from_frames(frames_path, output_pdf)
 
             if pdf_path:
