@@ -8,24 +8,33 @@ import subprocess
 
 # Function to download and convert video
 def download_video(url):
-    temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
+    temp_file = "temp_video.webm"
     output_file = "downloaded_video.mp4"
+
     try:
-        subprocess.run(
-            ['yt-dlp', '-f', 'best', '-o', temp_file, url],
-            check=True,
-            text=True
-        )
+        # Download the video using yt-dlp
+        subprocess.run(['yt-dlp', '-f', 'best', '-o', temp_file, url], check=True, text=True)
+
+        # Convert to MP4 using ffmpeg
         subprocess.run(
             ['ffmpeg', '-i', temp_file, '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', output_file],
-            check=True,
-            text=True
+            check=True, text=True
         )
+
+        # Cleanup the temporary file
         os.remove(temp_file)
+
         return output_file
+
+    except FileNotFoundError as e:
+        st.error(f"Required tool missing: {e}. Ensure yt-dlp and ffmpeg are installed.")
     except subprocess.CalledProcessError as e:
-        st.error(f"Error downloading or converting video: {e}")
-        return None
+        st.error(f"Command failed: {e}")
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+
+    return None
+
 
 # Function to enhance images
 def enhance_image(image_path):
