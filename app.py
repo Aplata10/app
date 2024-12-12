@@ -1,66 +1,56 @@
 import os
-import imageio
-import pytesseract
-from PIL import Image
 import streamlit as st
 import cv2
+import pytesseract
+from PIL import Image
 import numpy as np
+import subprocess
+from tempfile import NamedTemporaryFile
 
-# Function to validate video file using imageio
-def validate_video(video_path):
+# Function to download video
+def download_video(url):
+    temp_file = "downloaded_video.webm"
     try:
-        video_reader = imageio.get_reader(video_path, 'ffmpeg')
-        video_reader.close()
+        subprocess.run(
+            ['yt-dlp', '-f', 'best', '-o', temp_file, url],
+            check=True
+        )
+        st.info(f"Video downloaded successfully as {temp_file}")
+        return temp_file
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error during video download: {e}")
+        return None
+
+# Function to validate video file
+def validate_video_file(video_path):
+    if not os.path.exists(video_path):
+        st.error(f"Video file not found: {video_path}")
+        return False
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            st.error("Failed to open video file. Ensure the file is valid.")
+            return False
+        cap.release()
         return True
     except Exception as e:
         st.error(f"Video validation failed: {e}")
         return False
 
-# Function to extract total pages
-def extract_total_pages(frame_folder):
-    total_pages = 0
-    for frame in sorted(os.listdir(frame_folder)):
-        frame_path = os.path.join(frame_folder, frame)
-        img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
-        text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
+# Function to enhance images
+def enhance_image(image_path):
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    sharpening_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    img_sharpened = cv2.filter2D(img, -1, sharpening_kernel)
+    enhanced_path = image_path.replace(".jpg", "_enhanced.png")
+    cv2.imwrite(enhanced_path, img_sharpened)
+    return enhanced_path
 
-        for line in text.splitlines():
-            if "/" in line and line.strip().count("/") == 1:
-                try:
-                    _, pages = line.strip().split("/")
-                    pages = int(pages)
-                    total_pages = max(total_pages, pages)
-                except ValueError:
-                    continue
-
-    return total_pages
-
-# Function to extract middle frames using imageio
-def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5):
-    os.makedirs(output_folder, exist_ok=True)
-    video_reader = imageio.get_reader(video_path, 'ffmpeg')
-    fps = video_reader.get_meta_data()['fps']
-    video_length = video_reader.get_meta_data()['duration']
-    
-    segment_duration = (video_length - intro_length) / total_pages
-    segments = [intro_length + segment_duration * i + segment_duration / 2 for i in range(total_pages)]
-
-    for i, timestamp in enumerate(segments):
-        frame_number = int(timestamp * fps)
-        try:
-            frame = video_reader.get_data(frame_number)
-            frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
-            imageio.imwrite(frame_path, frame)
-            print(f"Extracted frame for page {i + 1} at {timestamp:.2f}s")
-        except IndexError:
-            print(f"Failed to extract frame for page {i + 1}")
-    video_reader.close()
-
-# Function to create PDF from frames
+# Function to create PDF
 def create_pdf_from_frames(frame_folder, output_pdf):
     images = [
         Image.open(os.path.join(frame_folder, frame)).convert("RGB")
-        for frame in sorted(os.listdir(frame_folder)) if frame.endswith(".jpg")
+        for frame in sorted(os.listdir(frame_folder)) if frame.endswith("_enhanced.png")
     ]
     if images:
         images[0].save(output_pdf, save_all=True, append_images=images[1:])
@@ -73,31 +63,28 @@ st.title("Drum Sheet Music Extractor")
 video_url = st.text_input("Enter YouTube video URL:")
 
 if st.button("Process Video"):
-    with st.spinner("Processing video..."):
-        video_path = "downloaded_video.webm"  # Replace with actual path if downloaded dynamically
-        if validate_video(video_path):
+    with st.spinner("Downloading and processing video..."):
+        video_path = download_video(video_url)
+        if video_path and validate_video_file(video_path):
             frames_path = "frames"
             middle_frames_path = "middle_frames"
             output_pdf = "sheet_music_pages.pdf"
 
+            # Process video and generate PDF
             os.makedirs(frames_path, exist_ok=True)
             os.makedirs(middle_frames_path, exist_ok=True)
-
             total_pages = extract_total_pages(frames_path)
-            if total_pages > 0:
-                extract_middle_frames(video_path, total_pages, middle_frames_path)
-                pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
+            extract_middle_frames(video_path, total_pages, middle_frames_path)
+            pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
 
-                if pdf_path:
-                    with open(pdf_path, "rb") as f:
-                        st.download_button(
-                            label="Download PDF",
-                            data=f,
-                            file_name="sheet_music_pages.pdf",
-                            mime="application/pdf"
-                        )
-                    st.success("PDF generated successfully!")
-                else:
-                    st.error("Failed to generate PDF.")
+            if pdf_path:
+                with open(pdf_path, "rb") as f:
+                    st.download_button(
+                        label="Download PDF",
+                        data=f,
+                        file_name="sheet_music_pages.pdf",
+                        mime="application/pdf"
+                    )
+                st.success("PDF generated successfully!")
             else:
-                st.error("Failed to determine total pages.")
+                st.error("Failed to generate PDF.")
