@@ -2,57 +2,85 @@ import os
 import streamlit as st
 import cv2
 import pytesseract
-from PIL import Image
-import numpy as np
+from PIL import Image, ImageEnhance
 import subprocess
-from tempfile import NamedTemporaryFile
 
-# Function to download the video directly in MP4 format
-def download_video(url):
+# Function to download the video in MP4 format
+def download_video_as_mp4(url, output_file="downloaded_video.mp4"):
     """
-    Downloads the video in MP4 format.
+    Downloads the video as an MP4 using yt-dlp.
     """
-    temp_file = NamedTemporaryFile(delete=False, suffix=".mp4").name
     try:
-        # Use yt-dlp to download the video in MP4 format
         subprocess.run(
-            ['yt-dlp', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]', '-o', temp_file, url],
+            ['yt-dlp', '-f', 'best[ext=mp4]', '-o', output_file, url],
             check=True
         )
-        st.info(f"Video downloaded successfully as {temp_file}")
-        return temp_file
+        if os.path.exists(output_file):
+            st.info(f"Video downloaded successfully: {output_file}")
+            return output_file
+        else:
+            st.error("Failed to download the video.")
+            return None
     except subprocess.CalledProcessError as e:
         st.error(f"Error during video download: {e}")
         return None
 
 # Function to enhance images
-def enhance_image(image_path):
+def enhance_image(image):
     """
     Enhances the quality of an image by sharpening it.
     """
-    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    sharpening_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    img_sharpened = cv2.filter2D(img, -1, sharpening_kernel)
-    enhanced_path = image_path.replace(".jpg", "_enhanced.png")
-    cv2.imwrite(enhanced_path, img_sharpened)
-    return enhanced_path
+    pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    enhancer = ImageEnhance.Sharpness(pil_image)
+    enhanced_image = enhancer.enhance(2.0)  # Increase sharpness
+    return cv2.cvtColor(np.array(enhanced_image), cv2.COLOR_RGB2BGR)
 
 # Function to create PDF
 def create_pdf_from_frames(frame_folder, output_pdf):
     """
-    Converts enhanced frames into a single PDF.
+    Converts extracted and enhanced frames into a PDF.
     """
     images = [
         Image.open(os.path.join(frame_folder, frame)).convert("RGB")
-        for frame in sorted(os.listdir(frame_folder)) if frame.endswith("_enhanced.png")
+        for frame in sorted(os.listdir(frame_folder)) if frame.endswith(".jpg")
     ]
     if images:
         images[0].save(output_pdf, save_all=True, append_images=images[1:])
+        st.success(f"PDF generated: {output_pdf}")
         return output_pdf
     else:
+        st.error("No frames to include in PDF.")
         return None
 
-# Function to extract total pages
+# Function to extract frames from the video
+def extract_frames(video_path, output_folder, total_pages, intro_length=5):
+    """
+    Extracts frames from the middle of segments based on the total number of pages.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    vidcap = cv2.VideoCapture(video_path)
+    fps = vidcap.get(cv2.CAP_PROP_FPS)
+    if fps == 0:
+        st.error("Invalid video FPS. Ensure the video file is correct.")
+        return
+    video_length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT)) / fps
+
+    segment_duration = (video_length - intro_length) / total_pages
+    segments = [intro_length + segment_duration * i + segment_duration / 2 for i in range(total_pages)]
+
+    for i, timestamp in enumerate(segments):
+        vidcap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
+        success, frame = vidcap.read()
+        if success:
+            enhanced_frame = enhance_image(frame)
+            frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
+            cv2.imwrite(frame_path, enhanced_frame)
+            st.info(f"Frame for page {i + 1} extracted at {timestamp:.2f}s.")
+        else:
+            st.warning(f"Failed to extract frame for page {i + 1}.")
+    vidcap.release()
+
+# Function to extract the total number of pages
 def extract_total_pages(frame_folder):
     """
     Scans frames to determine the total number of pages based on 'x/y' format.
@@ -62,49 +90,15 @@ def extract_total_pages(frame_folder):
         frame_path = os.path.join(frame_folder, frame)
         img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
         text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
-
-        # Extract 'x/y' page number
         for line in text.splitlines():
             if "/" in line and line.strip().count("/") == 1:
                 try:
                     _, pages = line.strip().split("/")
                     pages = int(pages)
-                    total_pages = max(total_pages, pages)  # Update max pages
+                    total_pages = max(total_pages, pages)
                 except ValueError:
                     continue
-
     return total_pages
-
-# Function to segment video and extract middle frames
-def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5):
-    """
-    Extracts one frame from the middle of each segment, given the total pages.
-    """
-    os.makedirs(output_folder, exist_ok=True)
-    vidcap = cv2.VideoCapture(video_path)
-    fps = vidcap.get(cv2.CAP_PROP_FPS)
-    if fps == 0:
-        st.error("Failed to read FPS from video. Ensure the video file is valid.")
-        return
-
-    video_length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT)) / fps
-
-    # Exclude intro length and calculate segment duration
-    segment_duration = (video_length - intro_length) / total_pages
-    segments = [intro_length + segment_duration * i + segment_duration / 2 for i in range(total_pages)]
-
-    # Extract frames at calculated timestamps
-    for i, timestamp in enumerate(segments):
-        vidcap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
-        success, frame = vidcap.read()
-        if success:
-            frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
-            cv2.imwrite(frame_path, frame)
-            print(f"Extracted frame for page {i + 1} at {timestamp:.2f}s")
-            # Enhance the frame
-            enhance_image(frame_path)
-
-    vidcap.release()
 
 # Streamlit UI
 st.title("Drum Sheet Music Extractor")
@@ -112,30 +106,31 @@ video_url = st.text_input("Enter YouTube video URL:")
 
 if st.button("Process Video"):
     with st.spinner("Downloading and processing video..."):
-        mp4_path = download_video(video_url)  # Directly download MP4
+        mp4_path = download_video_as_mp4(video_url)
         if mp4_path:
             frames_path = "frames"
             middle_frames_path = "middle_frames"
             output_pdf = "sheet_music_pages.pdf"
 
-            # Process video and generate PDF
-            os.makedirs(frames_path, exist_ok=True)
-            os.makedirs(middle_frames_path, exist_ok=True)
-            total_pages = extract_total_pages(frames_path)
-            if total_pages > 0:
-                extract_middle_frames(mp4_path, total_pages, middle_frames_path)
-                pdf_path = create_pdf_from_frames(middle_frames_path, output_pdf)
+            # Clear previous frames
+            if os.path.exists(frames_path):
+                for file in os.listdir(frames_path):
+                    os.remove(os.path.join(frames_path, file))
 
-                if pdf_path:
-                    with open(pdf_path, "rb") as f:
-                        st.download_button(
-                            label="Download PDF",
-                            data=f,
-                            file_name="sheet_music_pages.pdf",
-                            mime="application/pdf"
-                        )
-                    st.success("PDF generated successfully!")
-                else:
-                    st.error("Failed to generate PDF.")
+            os.makedirs(frames_path, exist_ok=True)
+
+            # Extract frames and process
+            st.info("Extracting frames...")
+            extract_frames(mp4_path, frames_path, total_pages=4)
+            pdf_path = create_pdf_from_frames(frames_path, output_pdf)
+
+            if pdf_path:
+                with open(pdf_path, "rb") as f:
+                    st.download_button(
+                        label="Download PDF",
+                        data=f,
+                        file_name="sheet_music_pages.pdf",
+                        mime="application/pdf"
+                    )
             else:
-                st.error("Failed to detect pages. Ensure the video contains visible sheet music.")
+                st.error("Failed to generate PDF.")
