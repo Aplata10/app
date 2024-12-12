@@ -70,21 +70,37 @@ def extract_total_pages(frame_folder):
     return total_pages
 
 # Function to extract frames
-def extract_frames(video_path, output_folder, frame_rate=1):
-    os.makedirs(output_folder, exist_ok=True)
+# Function to extract frames from video
+def extract_frames(video_path, frame_folder, frame_rate=1):
+    """
+    Extracts frames from a video at the specified frame rate.
+    """
+    os.makedirs(frame_folder, exist_ok=True)
     vidcap = cv2.VideoCapture(video_path)
+    fps = vidcap.get(cv2.CAP_PROP_FPS)
+
+    if not vidcap.isOpened():
+        print("Failed to open video file.")
+        return
+
+    print(f"Video FPS: {fps}")
+    interval = int(fps / frame_rate)  # Calculate interval between frames
+
     success, frame = vidcap.read()
     count = 0
-    fps = vidcap.get(cv2.CAP_PROP_FPS)
-    interval = int(fps / frame_rate)
+    total_frames = 0
 
     while success:
         if count % interval == 0:
-            frame_filename = os.path.join(output_folder, f"frame_{count}.jpg")
-            cv2.imwrite(frame_filename, frame)
+            frame_path = os.path.join(frame_folder, f"frame_{count}.jpg")
+            cv2.imwrite(frame_path, frame)
+            print(f"Saved frame at {frame_path}")
+            total_frames += 1
         success, frame = vidcap.read()
         count += 1
+
     vidcap.release()
+    print(f"Total frames extracted: {total_frames}")
 
 # Function to extract middle frames
 def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5):
