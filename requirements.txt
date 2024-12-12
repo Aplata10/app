@@ -1,6 +1,7 @@
 streamlit
 pytesseract
-opencv-python
+opencv-python-headless
 Pillow
 yt-dlp
 numpy
+ffmpeg-python
