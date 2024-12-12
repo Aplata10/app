@@ -3,54 +3,24 @@ import streamlit as st
 import cv2
 import pytesseract
 from PIL import Image
+from moviepy.video.io.VideoFileClip import VideoFileClip
 import numpy as np
 import subprocess
 from tempfile import NamedTemporaryFile
 
-# Function to download the video directly
-
+# Function to download the video
 def download_video(url):
-    """
-    Downloads the video in .webm format.
-    """
     temp_file = NamedTemporaryFile(delete=False, suffix=".webm").name
     try:
-        # Use yt-dlp to download the video in .webm format
+        # Use yt-dlp to download the video
         subprocess.run(
-            ['yt-dlp', '-f', 'bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]', '-o', temp_file, url],
+            ['yt-dlp', '-f', 'best', '-o', temp_file, url],
             check=True
         )
         st.info(f"Video downloaded successfully as {temp_file}")
         return temp_file
     except subprocess.CalledProcessError as e:
         st.error(f"Error during video download: {e}")
-        return None
-
-# Function to enhance images
-def enhance_image(image_path):
-    """
-    Enhances the quality of an image by sharpening it.
-    """
-    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    sharpening_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    img_sharpened = cv2.filter2D(img, -1, sharpening_kernel)
-    enhanced_path = image_path.replace(".jpg", "_enhanced.png")
-    cv2.imwrite(enhanced_path, img_sharpened)
-    return enhanced_path
-
-# Function to create PDF
-def create_pdf_from_frames(frame_folder, output_pdf):
-    """
-    Converts enhanced frames into a single PDF.
-    """
-    images = [
-        Image.open(os.path.join(frame_folder, frame)).convert("RGB")
-        for frame in sorted(os.listdir(frame_folder)) if frame.endswith("_enhanced.png")
-    ]
-    if images:
-        images[0].save(output_pdf, save_all=True, append_images=images[1:])
-        return output_pdf
-    else:
         return None
 
 # Function to extract total pages
@@ -76,15 +46,14 @@ def extract_total_pages(frame_folder):
 
     return total_pages
 
-# Function to segment video and extract middle frames
+# Function to extract middle frames using MoviePy
 def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5):
     """
-    Extracts one frame from the middle of each segment, given the total pages.
+    Extracts one frame from the middle of each segment using MoviePy, given the total pages.
     """
     os.makedirs(output_folder, exist_ok=True)
-    vidcap = cv2.VideoCapture(video_path)
-    fps = vidcap.get(cv2.CAP_PROP_FPS)
-    video_length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT)) / fps
+    clip = VideoFileClip(video_path)
+    video_length = clip.duration  # Get video length in seconds
 
     # Exclude intro length and calculate segment duration
     segment_duration = (video_length - intro_length) / total_pages
@@ -92,16 +61,27 @@ def extract_middle_frames(video_path, total_pages, output_folder, intro_length=5
 
     # Extract frames at calculated timestamps
     for i, timestamp in enumerate(segments):
-        vidcap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
-        success, frame = vidcap.read()
-        if success:
-            frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
-            cv2.imwrite(frame_path, frame)
-            print(f"Extracted frame for page {i + 1} at {timestamp:.2f}s")
-            # Enhance the frame
-            enhance_image(frame_path)
+        frame = clip.get_frame(timestamp)
+        frame_path = os.path.join(output_folder, f"page_{i + 1}.jpg")
+        cv2.imwrite(frame_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        print(f"Extracted frame for page {i + 1} at {timestamp:.2f}s")
 
-    vidcap.release()
+    clip.close()
+
+# Function to create PDF
+def create_pdf_from_frames(frame_folder, output_pdf):
+    """
+    Converts enhanced frames into a single PDF.
+    """
+    images = [
+        Image.open(os.path.join(frame_folder, frame)).convert("RGB")
+        for frame in sorted(os.listdir(frame_folder)) if frame.endswith(".jpg")
+    ]
+    if images:
+        images[0].save(output_pdf, save_all=True, append_images=images[1:])
+        return output_pdf
+    else:
+        return None
 
 # Streamlit UI
 st.title("Drum Sheet Music Extractor")
@@ -133,4 +113,3 @@ if st.button("Process Video"):
                 st.success("PDF generated successfully!")
             else:
                 st.error("Failed to generate PDF.")
-
