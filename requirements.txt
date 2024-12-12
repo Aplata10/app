@@ -1,9 +1,5 @@
 streamlit
-pytesseract
 opencv-python-headless
+pytesseract
 Pillow
 yt-dlp
-numpy
-ffmpeg-python
-moviepy
-imageio[ffmpeg]
