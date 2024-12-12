@@ -26,3 +26,5 @@ st.markdown("""
 3. Download your extracted file as a PDF.
 
 ### Recommended Video Types:
+- Videos that show clear, static drum sheet music
+
