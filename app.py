@@ -12,8 +12,16 @@ Welcome **Drummer**! 🎶🥁
 
 This app allows you to extract sheet music from drum tutorial videos and save it as a clean and clear PDF.
 It's designed to work best with YouTube shorts that display drum sheet music on the screen.
+""")
 
-### Instructions:
+video_url = st.text_input("Enter YouTube video URL:")
+if st.button("Process Video"):
+    with st.spinner("Processing your video..."):
+        # Process the video logic here
+        pass  # Replace with your function calls
+
+st.header("Instructions:")
+st.markdown("""
 1. Paste the link to a YouTube short containing sheet music.
 2. Click **Process Video** and wait for the app to process the video.
 3. Download your extracted file as a PDF.
