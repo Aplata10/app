@@ -13,6 +13,8 @@ Welcome **Drummer**! 🎶🥁
 This app allows you to extract sheet music from drum tutorial videos and save it as a clean and clear PDF.
 It's designed to work best with YouTube shorts that display drum sheet music on the screen.
 
+
+
 """)
 
 video_url = st.text_input("Enter YouTube video URL:")
