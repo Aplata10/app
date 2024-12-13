@@ -4,3 +4,4 @@ numpy
 Pillow
 yt-dlp
 easyocr
+pytesseract
