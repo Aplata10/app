@@ -5,9 +5,18 @@ import pytesseract
 import numpy as np
 from PIL import Image, ImageEnhance
 import subprocess
+import uuid
+
+# Function to clear old files
+def clear_old_files(folder):
+    if os.path.exists(folder):
+        for file in os.listdir(folder):
+            os.remove(os.path.join(folder, file))
+    else:
+        os.makedirs(folder)
 
 # Function to download the video in MP4 format
-def download_video_as_mp4(url, output_file="downloaded_video.mp4"):
+def download_video_as_mp4(url, output_file):
     try:
         subprocess.run(
             ['yt-dlp', '-f', 'best[ext=mp4]', '-o', output_file, url],
@@ -69,23 +78,6 @@ def extract_frames(video_path, output_folder, total_pages, intro_length=5):
             st.warning(f"Failed to extract frame for page {i + 1}.")
     vidcap.release()
 
-# Function to extract total pages
-def extract_total_pages(frame_folder):
-    total_pages = 0
-    for frame in sorted(os.listdir(frame_folder)):
-        frame_path = os.path.join(frame_folder, frame)
-        img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
-        text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
-        for line in text.splitlines():
-            if "/" in line and line.strip().count("/") == 1:
-                try:
-                    _, pages = line.strip().split("/")
-                    pages = int(pages)
-                    total_pages = max(total_pages, pages)
-                except ValueError:
-                    continue
-    return total_pages
-
 # Streamlit UI
 st.title("Drum Sheet Music Extractor")
 st.markdown("""
@@ -100,23 +92,22 @@ with st.container():
     video_url = st.text_input("Enter YouTube video URL:")
     if st.button("Process Video"):
         with st.spinner("Downloading and processing video..."):
-            mp4_path = download_video_as_mp4(video_url)
+            unique_id = str(uuid.uuid4())  # Generate a unique ID for this session
+            video_file = f"downloaded_video_{unique_id}.mp4"
+            frames_folder = f"frames_{unique_id}"
+            output_pdf = f"sheet_music_pages_{unique_id}.pdf"
+
+            # Clear old files
+            clear_old_files(frames_folder)
+
+            # Download video
+            mp4_path = download_video_as_mp4(video_url, video_file)
             if mp4_path:
-                frames_path = "frames"
-                output_pdf = "sheet_music_pages.pdf"
-
-                # Clear previous frames
-                if os.path.exists(frames_path):
-                    for file in os.listdir(frames_path):
-                        os.remove(os.path.join(frames_path, file))
-
-                os.makedirs(frames_path, exist_ok=True)
-
-                # Extract frames and process
+                # Process video and generate PDF
                 st.info("Extracting frames...")
                 total_pages = 4  # Example: Replace with dynamic logic using `extract_total_pages` if needed
-                extract_frames(mp4_path, frames_path, total_pages)
-                pdf_path = create_pdf_from_frames(frames_path, output_pdf)
+                extract_frames(mp4_path, frames_folder, total_pages)
+                pdf_path = create_pdf_from_frames(frames_folder, output_pdf)
 
                 if pdf_path:
                     with open(pdf_path, "rb") as f:
@@ -128,6 +119,8 @@ with st.container():
                         )
                 else:
                     st.error("Failed to generate PDF.")
+            else:
+                st.error("Video download failed. Please check the URL.")
 
 st.header("Instructions")
 st.markdown("""
