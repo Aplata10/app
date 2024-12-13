@@ -1,10 +1,16 @@
 import os
+import uuid
 import streamlit as st
 import cv2
+import pytesseract
 import numpy as np
 from PIL import Image, ImageEnhance
 import subprocess
-import easyocr
+
+def clear_old_files(folder):
+    if os.path.exists(folder):
+        for file in os.listdir(folder):
+            os.remove(os.path.join(folder, file))
 
 # Function to download the video in MP4 format
 def download_video_as_mp4(url, output_file="downloaded_video.mp4"):
@@ -69,14 +75,14 @@ def extract_frames(video_path, output_folder, total_pages, intro_length=5):
             st.warning(f"Failed to extract frame for page {i + 1}.")
     vidcap.release()
 
-# Function to extract total pages using EasyOCR
+# Function to extract total pages
 def extract_total_pages(frame_folder):
-    reader = easyocr.Reader(['en'])  # Load EasyOCR
     total_pages = 0
     for frame in sorted(os.listdir(frame_folder)):
         frame_path = os.path.join(frame_folder, frame)
-        text = reader.readtext(frame_path, detail=0)  # Extract text from image
-        for line in text:
+        img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
+        text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
+        for line in text.splitlines():
             if "/" in line and line.strip().count("/") == 1:
                 try:
                     _, pages = line.strip().split("/")
@@ -86,51 +92,60 @@ def extract_total_pages(frame_folder):
                     continue
     return total_pages
 
-# Streamlit Interface
+# Streamlit App
 st.title("Drum Sheet Music Extractor")
 st.markdown("""
-Welcome **Drummer**! 🎶🥁
+Welcome **Drummer**! 🎶🧠
 
 This app allows you to extract sheet music from drum tutorial videos and save it as a clean and clear PDF.
 It's designed to work best with YouTube shorts that display drum sheet music on the screen.
 """)
 
-# Input for video URL
-video_url = st.text_input("Enter YouTube video URL:")
+# Input and button together
+with st.container():
+    video_url = st.text_input("Enter YouTube video URL:")
+    if st.button("Process Video"):
+        with st.spinner("Downloading and processing video..."):
+            unique_id = str(uuid.uuid4())  # Unique session identifier
+            video_file = f"downloaded_video_{unique_id}.mp4"
+            frames_folder = f"frames_{unique_id}"
+            output_pdf = f"sheet_music_pages_{unique_id}.pdf"
 
-if st.button("Process Video"):
-    with st.spinner("Downloading and processing video..."):
-        # Download video as MP4
-        mp4_path = download_video_as_mp4(video_url)
-        if mp4_path:
-            frames_path = "frames"
-            output_pdf = "sheet_music_pages.pdf"
+            # Clear old files
+            clear_old_files(frames_folder)
 
-            # Clear previous frames
-            if os.path.exists(frames_path):
-                for file in os.listdir(frames_path):
-                    os.remove(os.path.join(frames_path, file))
-            os.makedirs(frames_path, exist_ok=True)
+            # Download video
+            mp4_path = download_video_as_mp4(video_url, video_file)
+            if mp4_path:
+                # Extract initial frames for total pages detection
+                st.info("Extracting initial frames...")
+                extract_frames(mp4_path, frames_folder, total_pages=5)
 
-            # Extract frames and process
-            st.info("Extracting frames...")
-            total_pages = extract_total_pages(frames_path)
-            if total_pages > 0:
-                extract_frames(mp4_path, frames_path, total_pages)
-                pdf_path = create_pdf_from_frames(frames_path, output_pdf)
-
-                if pdf_path:
-                    with open(pdf_path, "rb") as f:
-                        st.download_button(
-                            label="Download PDF",
-                            data=f,
-                            file_name="sheet_music_pages.pdf",
-                            mime="application/pdf"
-                        )
+                # Dynamically calculate total pages
+                st.info("Detecting total pages...")
+                total_pages = extract_total_pages(frames_folder)
+                if total_pages == 0:
+                    st.error("Failed to detect pages. Ensure the video contains visible sheet music.")
                 else:
-                    st.error("Failed to generate PDF.")
+                    # Clear old frames and re-extract for final processing
+                    clear_old_files(frames_folder)
+                    st.info("Extracting frames for PDF generation...")
+                    extract_frames(mp4_path, frames_folder, total_pages)
+
+                    # Generate PDF
+                    pdf_path = create_pdf_from_frames(frames_folder, output_pdf)
+                    if pdf_path:
+                        with open(pdf_path, "rb") as f:
+                            st.download_button(
+                                label="Download PDF",
+                                data=f,
+                                file_name="sheet_music_pages.pdf",
+                                mime="application/pdf"
+                            )
+                    else:
+                        st.error("Failed to generate PDF.")
             else:
-                st.error("No pages detected. Ensure the video contains visible sheet music.")
+                st.error("Video download failed. Please check the URL.")
 
 st.header("Instructions")
 st.markdown("""
