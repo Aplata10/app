@@ -1,6 +1,6 @@
 streamlit
 opencv-python-headless
-pytesseract
+numpy
 Pillow
 yt-dlp
-numpy
+easyocr
