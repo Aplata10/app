@@ -95,7 +95,7 @@ def extract_total_pages(frame_folder):
 # Streamlit App
 st.title("Drum Sheet Music Extractor")
 st.markdown("""
-Welcome **Drummer**! 🎶🧠
+Welcome **Drummer**! 🎶🥁
 
 This app allows you to extract sheet music from drum tutorial videos and save it as a clean and clear PDF.
 It's designed to work best with YouTube shorts that display drum sheet music on the screen.
